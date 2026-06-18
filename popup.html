@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>北海道機位</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Microsoft JhengHei', '微軟正黑體', sans-serif;
+    font-size: 13px;
+    background: #1e2a3a;
+    color: #e2e8f0;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* 頂部標題列 */
+  #header {
+    background: #1a2535;
+    padding: 8px 12px 0 12px;
+    border-bottom: 1px solid #2d3f55;
+    -webkit-app-region: drag;
+  }
+  .header-top {
+    display: flex; align-items: center; gap: 8px; padding-bottom: 6px;
+  }
+  #header .title { font-weight: bold; font-size: 14px; flex: 1; }
+  #header .month-nav { display: flex; gap: 4px; -webkit-app-region: no-drag; }
+  #header .month-nav button {
+    background: #2d3f55; border: none; color: #93c5fd;
+    padding: 3px 8px; border-radius: 4px; cursor: pointer; font-size: 12px;
+  }
+  #header .month-nav button:hover { background: #3b5068; }
+  #header .month-nav .cur-month {
+    color: #fff; font-weight: bold; font-size: 13px;
+    padding: 3px 6px; min-width: 72px; text-align: center;
+  }
+
+  /* 頁籤列 */
+  .tab-bar {
+    display: flex; gap: 0; -webkit-app-region: no-drag;
+  }
+  .tab-btn {
+    padding: 5px 14px; font-size: 12px; cursor: pointer;
+    border: none; background: transparent; color: #64748b;
+    border-bottom: 2px solid transparent;
+    transition: color .15s, border-color .15s;
+  }
+  .tab-btn:hover { color: #cbd5e1; }
+  .tab-btn.active { color: #93c5fd; border-bottom-color: #3b82f6; font-weight: bold; }
+
+  /* 月份操控列（只在月份頁籤顯示）*/
+  #month-ctrl {
+    display: flex; gap: 4px; align-items: center;
+    padding: 4px 12px; background: #1a2535;
+    border-bottom: 1px solid #2d3f55;
+    -webkit-app-region: no-drag;
+  }
+  #month-ctrl button {
+    background: #2d3f55; border: none; color: #93c5fd;
+    padding: 3px 8px; border-radius: 4px; cursor: pointer; font-size: 12px;
+  }
+  #month-ctrl button:hover { background: #3b5068; }
+  #month-ctrl .cur-month {
+    color: #fff; font-weight: bold; font-size: 13px;
+    padding: 3px 6px; min-width: 72px; text-align: center;
+  }
+
+  /* 主內容區 */
+  #content { flex: 1; overflow-y: auto; padding: 8px 10px; }
+
+  /* 航班卡片 */
+  .flight-card {
+    background: #253347;
+    border-radius: 6px;
+    padding: 8px 10px;
+    margin-bottom: 6px;
+    border-left: 3px solid #4b5563;
+  }
+  .flight-card.BR { border-left-color: #10b981; }
+  .flight-card.CI { border-left-color: #3b82f6; }
+  .flight-card.JX { border-left-color: #8b5cf6; }
+
+  .card-header {
+    display: flex; align-items: center;
+    justify-content: space-between; margin-bottom: 5px;
+  }
+  .flight-name { font-weight: bold; font-size: 13px; }
+  .flight-name.BR { color: #34d399; }
+  .flight-name.CI { color: #60a5fa; }
+  .flight-name.JX { color: #a78bfa; }
+
+  .rate-badge {
+    font-size: 12px; font-weight: bold;
+    padding: 1px 7px; border-radius: 10px;
+  }
+  .rate-low  { background: #064e3b; color: #6ee7b7; }
+  .rate-mid  { background: #78350f; color: #fcd34d; }
+  .rate-high { background: #7f1d1d; color: #fca5a5; }
+  .rate-na   { background: #374151; color: #9ca3af; }
+
+  .card-stats {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px;
+  }
+  .stat { text-align: center; }
+  .stat .val { font-size: 18px; font-weight: bold; line-height: 1.2; }
+  .stat .lbl { font-size: 10px; color: #64748b; margin-top: 1px; }
+  .stat.avail .val { color: #34d399; }
+  .stat.used .val  { color: #fbbf24; }
+  .stat.curr .val  { color: #93c5fd; }
+
+  /* 暑期頁籤：3欄統計 */
+  .card-stats-3 {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px;
+  }
+
+  /* 進度條 */
+  .progress-wrap {
+    background: #1e2a3a; border-radius: 3px; height: 5px;
+    margin-top: 6px; overflow: hidden;
+  }
+  .progress-bar { height: 100%; border-radius: 3px; transition: width .3s; }
+  .progress-low  { background: #10b981; }
+  .progress-mid  { background: #f59e0b; }
+  .progress-high { background: #ef4444; }
+
+  /* 暑期月份明細小列 */
+  .month-row {
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 11px; color: #64748b; margin-top: 5px;
+    padding-top: 5px; border-top: 1px solid #1e2a3a;
+  }
+  .month-row span { min-width: 50px; text-align: center; }
+  .month-row .mlbl { color: #4b5563; min-width: 32px; }
+
+  /* 無資料提示 */
+  .no-data {
+    text-align: center; color: #4b5563;
+    padding: 30px 0; font-size: 13px;
+  }
+
+  /* 底部狀態列 */
+  #footer {
+    background: #1a2535; border-top: 1px solid #2d3f55;
+    padding: 5px 12px; display: flex;
+    align-items: center; justify-content: space-between;
+    font-size: 11px; color: #64748b;
+  }
+  #footer button {
+    background: #2d3f55; border: none; color: #93c5fd;
+    padding: 2px 10px; border-radius: 4px; cursor: pointer; font-size: 11px;
+  }
+  #footer button:hover { background: #3b5068; }
+  #footer #status-text { flex: 1; }
+  #loading { display: none; color: #fbbf24; margin-right: 8px; }
+</style>
+</head>
+<body>
+
+<div id="header">
+  <div class="header-top">
+    <span class="title">✈ 北海道機位</span>
+  </div>
+  <div class="tab-bar">
+    <button class="tab-btn active" onclick="switchTab('month')">月份摘要</button>
+    <button class="tab-btn" onclick="switchTab('summer')">☀ 暑期押票</button>
+    <button class="tab-btn" onclick="switchTab('paid')">💰 單團付訂</button>
+  </div>
+</div>
+
+<!-- 月份切換列（只在月份頁籤顯示）-->
+<div id="month-ctrl">
+  <button onclick="changeMonth(-1)">◀</button>
+  <span class="cur-month" id="cur-month-label">--</span>
+  <button onclick="changeMonth(1)">▶</button>
+  <button onclick="goToday()" style="background:#1e3a5f;color:#93c5fd">本月</button>
+</div>
+
+<div id="content">
+  <div class="no-data" id="init-msg">載入中…</div>
+</div>
+
+<div id="footer">
+  <span id="loading">↻ 更新中…</span>
+  <span id="status-text">尚未載入</span>
+  <button onclick="refresh()">↻ 重整</button>
+</div>
+
+<script>
+const LOCAL_API    = '__LOCAL_API__';
+const FLIGHT_ORDER = ['BR116','BR166','CI130','JX850','JX860'];
+
+let curYear, curMonth, curTab = 'month';
+
+function initDate() {
+  const now = new Date();
+  curYear  = now.getFullYear();
+  curMonth = now.getMonth() + 1;
+}
+
+// ── 頁籤切換 ──────────────────────────────────
+function switchTab(tab) {
+  curTab = tab;
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+  document.getElementById('month-ctrl').style.display = tab === 'month' ? 'flex' : 'none';
+  refresh();
+}
+
+// ── 月份操控 ──────────────────────────────────
+function changeMonth(delta) {
+  curMonth += delta;
+  if (curMonth > 12) { curMonth = 1; curYear++; }
+  if (curMonth < 1)  { curMonth = 12; curYear--; }
+  loadMonthData();
+}
+
+function goToday() {
+  const now = new Date();
+  curYear  = now.getFullYear();
+  curMonth = now.getMonth() + 1;
+  loadMonthData();
+}
+
+function refresh() {
+  if (curTab === 'month')  loadMonthData();
+  else if (curTab === 'summer') loadSummerData();
+  else                    loadPaidData();
+}
+
+// ── 取得單月資料 ──────────────────────────────
+async function fetchMonth(year, month) {
+  const url = LOCAL_API + '?year=' + year + '&month=' + month;
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error('HTTP ' + resp.status);
+  const j = await resp.json();
+  return j.flights || [];
+}
+
+// ── 月份摘要頁 ────────────────────────────────
+async function loadMonthData() {
+  document.getElementById('cur-month-label').textContent =
+    curYear + '-' + String(curMonth).padStart(2, '0');
+  setLoading(true);
+  try {
+    const flights = await fetchMonth(curYear, curMonth);
+    renderMonthCards(flights);
+    setStatus('更新：' + nowTime());
+  } catch (e) {
+    setStatus('錯誤：' + e.message);
+    document.getElementById('content').innerHTML =
+      '<div class="no-data">⚠ 無法取得資料<br><small>' + e.message + '</small></div>';
+  }
+  setLoading(false);
+}
+
+function renderMonthCards(flights) {
+  const grouped = groupByFlight(flights);
+  const keys = sortedKeys(grouped);
+  if (keys.length === 0) {
+    document.getElementById('content').innerHTML = '<div class="no-data">本月無資料</div>';
+    return;
+  }
+  document.getElementById('content').innerHTML = keys.map(k => flightCard(k, grouped[k])).join('');
+}
+
+// ── 暑期成行率頁（6-8月加總）─────────────────
+async function loadSummerData() {
+  setLoading(true);
+  const year = new Date().getFullYear();
+  try {
+    const [jun, jul, aug] = await Promise.all([
+      fetchMonth(year, 6),
+      fetchMonth(year, 7),
+      fetchMonth(year, 8),
+    ]);
+
+    // 月別分組（用於顯示明細）
+    const byMonth = { 6: groupByFlight(jun), 7: groupByFlight(jul), 8: groupByFlight(aug) };
+
+    // 全期加總
+    const total = {};
+    for (const [m, g] of Object.entries(byMonth)) {
+      for (const [k, d] of Object.entries(g)) {
+        if (!total[k]) total[k] = { curr: 0, used: 0 };
+        total[k].curr += d.curr;
+        total[k].used += d.used;
+      }
+    }
+
+    const keys = sortedKeys(total);
+    if (keys.length === 0) {
+      document.getElementById('content').innerHTML = '<div class="no-data">暑期無資料</div>';
+    } else {
+      document.getElementById('content').innerHTML =
+        `<div style="font-size:11px;color:#4b5563;padding:4px 2px 6px">${year} 年 6-8 月整體押票成行率</div>` +
+        keys.map(k => summerCard(k, total[k], byMonth, year)).join('');
+    }
+    setStatus('更新：' + nowTime());
+  } catch (e) {
+    setStatus('錯誤：' + e.message);
+    document.getElementById('content').innerHTML =
+      '<div class="no-data">⚠ 無法取得資料<br><small>' + e.message + '</small></div>';
+  }
+  setLoading(false);
+}
+
+// ── 卡片渲染 ──────────────────────────────────
+function flightCard(k, d) {
+  const avail = d.curr - d.used;
+  const { rate, rateCls, barCls, rateLabel } = calcRate(d.curr, d.used);
+  const availColor = avail <= 0 ? '#ef4444' : '#34d399';
+  const airline = k.slice(0, 2);
+  return `<div class="flight-card ${airline}">
+    <div class="card-header">
+      <span class="flight-name ${airline}">${k}</span>
+      <span class="rate-badge ${rateCls}">${rateLabel}</span>
+    </div>
+    <div class="card-stats">
+      <div class="stat curr"><div class="val">${d.curr}</div><div class="lbl">目前機位</div></div>
+      <div class="stat used"><div class="val">${d.used}</div><div class="lbl">已使用</div></div>
+      <div class="stat avail"><div class="val" style="color:${availColor}">${avail}</div><div class="lbl">剩餘可售</div></div>
+      <div class="stat"><div class="val" style="font-size:14px">${d.count||'-'}</div><div class="lbl">筆數</div></div>
+    </div>
+    <div class="progress-wrap"><div class="progress-bar ${barCls}" style="width:${Math.min(rate||0,100)}%"></div></div>
+  </div>`;
+}
+
+function summerCard(k, total, byMonth, year) {
+  const { rate, rateCls, barCls, rateLabel } = calcRate(total.curr, total.used);
+  const airline = k.slice(0, 2);
+
+  // 各月明細列
+  const monthRows = [6, 7, 8].map(m => {
+    const d = byMonth[m][k];
+    if (!d) return `<span class="mlbl">${m}月</span><span>-</span><span>-</span><span style="color:#4b5563">--</span>`;
+    const r = d.curr > 0 ? Math.round(d.used / d.curr * 100) : null;
+    const rColor = r === null ? '#4b5563' : r >= 80 ? '#fca5a5' : r >= 60 ? '#fcd34d' : '#6ee7b7';
+    return `<span class="mlbl">${m}月</span><span style="color:#93c5fd">${d.curr}</span><span style="color:#fbbf24">${d.used}</span><span style="color:${rColor}">${r !== null ? r + '%' : '--'}</span>`;
+  }).join('');
+
+  return `<div class="flight-card ${airline}">
+    <div class="card-header">
+      <span class="flight-name ${airline}">${k}</span>
+      <span class="rate-badge ${rateCls}">整體 ${rateLabel}</span>
+    </div>
+    <div class="card-stats-3">
+      <div class="stat curr"><div class="val">${total.curr}</div><div class="lbl">總機位</div></div>
+      <div class="stat used"><div class="val">${total.used}</div><div class="lbl">已使用</div></div>
+      <div class="stat"><div class="val" style="color:${total.curr-total.used<=0?'#ef4444':'#34d399'}">${total.curr-total.used}</div><div class="lbl">剩餘可售</div></div>
+    </div>
+    <div class="progress-wrap"><div class="progress-bar ${barCls}" style="width:${Math.min(rate||0,100)}%"></div></div>
+    <div class="month-row" style="display:grid;grid-template-columns:32px 1fr 1fr 1fr;gap:2px;text-align:center">
+      <span class="mlbl" style="color:#4b5563;font-size:10px">月份</span>
+      <span style="color:#4b5563;font-size:10px">機位</span>
+      <span style="color:#4b5563;font-size:10px">已用</span>
+      <span style="color:#4b5563;font-size:10px">成行率</span>
+    </div>
+    <div style="display:grid;grid-template-columns:32px 1fr 1fr 1fr;gap:2px;text-align:center;font-size:12px;margin-top:2px">${monthRows}</div>
+  </div>`;
+}
+
+// ── 單團付訂成行率頁 ──────────────────────────
+async function loadPaidData() {
+  setLoading(true);
+  try {
+    const url = LOCAL_API.replace('/api', '/api/paid');
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const json = await resp.json();
+    renderPaidCards(json.groups || []);
+    setStatus('更新：' + nowTime());
+  } catch (e) {
+    setStatus('錯誤：' + e.message);
+    document.getElementById('content').innerHTML =
+      '<div class="no-data">⚠ 無法取得資料<br><small>' + e.message + '</small></div>';
+  }
+  setLoading(false);
+}
+
+function renderPaidCards(groups) {
+  const content = document.getElementById('content');
+  if (groups.length === 0) {
+    content.innerHTML = '<div class="no-data">尚無付訂團資料<br><small>下次從 ERP 同步後自動出現</small></div>';
+    return;
+  }
+
+  // 依航班號分組，再依出發日排序
+  const byFlight = {};
+  for (const g of groups) {
+    const k = g.flight_no || g.airline || '?';
+    if (!byFlight[k]) byFlight[k] = [];
+    byFlight[k].push(g);
+  }
+  // 依航班號排序
+  const keys = FLIGHT_ORDER.filter(k => byFlight[k]);
+  for (const k of Object.keys(byFlight)) {
+    if (!keys.includes(k)) keys.push(k);
+  }
+
+  let html = `<div style="font-size:11px;color:#4b5563;padding:4px 2px 6px">備註含 $ 或 FULLPAY 的付訂團　共 ${groups.length} 筆</div>`;
+
+  for (const k of keys) {
+    const airline = k.slice(0, 2);
+    // 依日期排序
+    const list = byFlight[k].slice().sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+
+    // 計算航班小計
+    const totalCurr = list.reduce((s, g) => s + (Number(g.total_seats) || 0), 0);
+    const totalUsed = list.reduce((s, g) => s + (Number(g.hk) || 0) + (Number(g.kk) || 0), 0);
+    const { rateCls, rateLabel } = calcRate(totalCurr, totalUsed);
+
+    html += `<div class="flight-card ${airline}" style="margin-bottom:8px">
+      <div class="card-header" style="margin-bottom:6px">
+        <span class="flight-name ${airline}">${k}</span>
+        <span style="font-size:11px;color:#4b5563">${list.length} 團</span>
+        <span class="rate-badge ${rateCls}" style="margin-left:auto">${rateLabel}</span>
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:11px">
+        <thead>
+          <tr style="color:#4b5563;border-bottom:1px solid #1e2a3a">
+            <th style="text-align:left;padding:2px 4px;font-weight:normal">出發日</th>
+            <th style="text-align:left;padding:2px 4px;font-weight:normal">團號</th>
+            <th style="text-align:center;padding:2px 4px;font-weight:normal">配額</th>
+            <th style="text-align:center;padding:2px 4px;font-weight:normal">HK+KK</th>
+            <th style="text-align:center;padding:2px 4px;font-weight:normal">成行率</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${list.map(g => {
+            const used = (Number(g.hk) || 0) + (Number(g.kk) || 0);
+            const curr = Number(g.total_seats) || 0;
+            const { rate, rateCls: rc, rateLabel: rl } = calcRate(curr, used);
+            const dateShort = (g.date || '').slice(5); // MM-DD
+            const rmk = (g.remark || '');
+            const hasFull = /FULLPAY/i.test(rmk) ? '💳' : '$';
+            return `<tr style="border-bottom:1px solid #1e2a3a20">
+              <td style="padding:3px 4px;color:#93c5fd">${dateShort}</td>
+              <td style="padding:3px 4px;font-family:monospace;font-size:10px">${hasFull} ${g.group_no || ''}</td>
+              <td style="text-align:center;padding:3px 4px;color:#fbbf24">${curr}</td>
+              <td style="text-align:center;padding:3px 4px;color:#34d399">${used}</td>
+              <td style="text-align:center;padding:3px 4px"><span class="rate-badge ${rc}" style="font-size:10px;padding:0 5px">${rl}</span></td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>`;
+  }
+
+  content.innerHTML = html;
+}
+
+// ── 工具函式 ──────────────────────────────────
+function groupByFlight(flights) {
+  const g = {};
+  for (const f of flights) {
+    const k = f.flight_no;
+    if (!g[k]) g[k] = { curr: 0, used: 0, count: 0 };
+    g[k].curr  += Number(f.current_seats) || 0;
+    g[k].used  += Number(f.used_seats)    || 0;
+    g[k].count++;
+  }
+  return g;
+}
+
+function sortedKeys(grouped) {
+  const keys = FLIGHT_ORDER.filter(k => grouped[k]);
+  for (const k of Object.keys(grouped)) {
+    if (!keys.includes(k)) keys.push(k);
+  }
+  return keys;
+}
+
+function calcRate(curr, used) {
+  const rate = curr > 0 ? Math.round(used / curr * 100) : null;
+  let rateCls = 'rate-na', barCls = 'progress-low', rateLabel = '--%';
+  if (rate !== null) {
+    rateLabel = rate + '%';
+    if (rate >= 80)      { rateCls = 'rate-high'; barCls = 'progress-high'; }
+    else if (rate >= 60) { rateCls = 'rate-mid';  barCls = 'progress-mid'; }
+    else                 { rateCls = 'rate-low';  barCls = 'progress-low'; }
+  }
+  return { rate, rateCls, barCls, rateLabel };
+}
+
+function nowTime() {
+  return new Date().toLocaleTimeString('zh-TW', {hour:'2-digit',minute:'2-digit'});
+}
+function setLoading(on) {
+  document.getElementById('loading').style.display = on ? 'inline' : 'none';
+}
+function setStatus(txt) {
+  document.getElementById('status-text').textContent = txt;
+}
+
+// ── 初始化 ────────────────────────────────────
+initDate();
+loadMonthData();
+window.__autoRefresh = function() { refresh(); };
+</script>
+</body>
+</html>

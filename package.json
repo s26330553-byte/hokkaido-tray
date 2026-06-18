@@ -1,0 +1,13 @@
+{
+  "name": "hokkaido-tray",
+  "version": "1.0.0",
+  "description": "北海道機位 Windows 系統托盤小程式",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "install-deps": "npm install systray2"
+  },
+  "dependencies": {
+    "systray2": "^2.1.4"
+  }
+}
