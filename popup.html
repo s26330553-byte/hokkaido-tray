@@ -373,20 +373,32 @@ async function loadJxpData() {
 
 function jxpCard(flightNo, rows) {
   rows = rows.slice().sort((a,b) => (a.date||'').localeCompare(b.date||''));
-  const totalCurr = rows.reduce((s,r) => s + (Number(r.total_seats)||0), 0);
-  const totalUsed = rows.reduce((s,r) => s + (Number(r.hk)||0) + (Number(r.kk)||0), 0);
+
+  // 依日期合併
+  const byDate = {};
+  for (const r of rows) {
+    const d = r.date || '';
+    if (!byDate[d]) byDate[d] = { curr: 0, used: 0, groups: [] };
+    byDate[d].curr   += Number(r.total_seats) || 0;
+    byDate[d].used   += (Number(r.hk)||0) + (Number(r.kk)||0);
+    byDate[d].groups.push(r.group_no || '');
+  }
+  const dates = Object.keys(byDate).sort();
+
+  const totalCurr = dates.reduce((s,d) => s + byDate[d].curr, 0);
+  const totalUsed = dates.reduce((s,d) => s + byDate[d].used, 0);
   const { rate, rateCls, barCls, rateLabel } = calcRate(totalCurr, totalUsed);
   const airline = flightNo.slice(0,2);
 
-  const rangeRows = rows.map(r => {
-    const curr = Number(r.total_seats)||0;
-    const used = (Number(r.hk)||0) + (Number(r.kk)||0);
+  const dateRows = dates.map(d => {
+    const { curr, used, groups } = byDate[d];
     const { rate: rr, rateLabel: rl } = calcRate(curr, used);
     const rColor = rr === null ? '#4b5563' : rr >= 80 ? '#fca5a5' : rr >= 60 ? '#fcd34d' : '#6ee7b7';
-    const md = r.date ? r.date.slice(5).replace('-','/') : '--';
+    const md = d ? d.slice(5).replace('-','/') : '--';
+    const groupTip = groups.join('、');
     return `<tr style="border-bottom:1px solid #1e2a3a">
       <td style="padding:3px 6px;color:#94a3b8;white-space:nowrap">${md}</td>
-      <td style="padding:3px 6px;color:#cbd5e1;font-size:11px">${r.group_no||''}</td>
+      <td style="padding:3px 6px;color:#64748b;font-size:10px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${groupTip}">${groupTip}</td>
       <td style="padding:3px 6px;text-align:right;color:#93c5fd">${curr}</td>
       <td style="padding:3px 6px;text-align:right;color:#fbbf24">${used}</td>
       <td style="padding:3px 6px;text-align:right;color:${rColor};font-weight:bold">${rl}</td>
@@ -396,7 +408,7 @@ function jxpCard(flightNo, rows) {
   return `<div class="flight-card ${airline}">
     <div class="card-header">
       <span class="flight-name ${airline}">${flightNo}</span>
-      <span style="font-size:11px;color:#64748b">${rows.length} 團</span>
+      <span style="font-size:11px;color:#64748b">${dates.length} 個出發日 / ${rows.length} 團</span>
       <span class="rate-badge ${rateCls}" style="margin-left:auto">整體 ${rateLabel}</span>
     </div>
     <div class="card-stats-3">
@@ -413,7 +425,7 @@ function jxpCard(flightNo, rows) {
         <th style="padding:2px 6px;text-align:right;font-weight:normal">已用</th>
         <th style="padding:2px 6px;text-align:right;font-weight:normal">成行率</th>
       </tr></thead>
-      <tbody>${rangeRows}</tbody>
+      <tbody>${dateRows}</tbody>
     </table>
   </div>`;
 }
