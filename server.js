@@ -66,6 +66,16 @@ function startServer() {
           else      { res.writeHead(200); res.end(data); }
         });
 
+      } else if (urlObj.pathname === '/api/jxp') {
+        // 代理：取得 JX 暑假 P 階段團資料
+        const gasUrl = `${config.GAS_URL}?action=getJxpGroups&key=${config.API_KEY}`;
+        fetchGas(gasUrl, (err, data) => {
+          res.setHeader('Access-Control-Allow-Origin', '*');
+          res.setHeader('Content-Type', 'application/json; charset=utf-8');
+          if (err) { res.writeHead(500); res.end(JSON.stringify({ error: err.message })); }
+          else      { res.writeHead(200); res.end(data); }
+        });
+
       } else {
         res.writeHead(404); res.end();
       }

@@ -339,7 +339,7 @@ function inJxpRange(dateStr) {
 async function loadJxpData() {
   setLoading(true);
   try {
-    const resp = await fetch(LOCAL_API + '/paid');
+    const resp = await fetch(LOCAL_API + '/jxp');
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
     const json = await resp.json();
     const all = (json.groups || []).filter(g =>
