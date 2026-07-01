@@ -169,6 +169,7 @@
     <button class="tab-btn" onclick="switchTab('summer')">☀ 暑期押票</button>
     <button class="tab-btn" onclick="switchTab('paid')">💰 單團付訂</button>
     <button class="tab-btn" onclick="switchTab('jxp')">✈ JX暑假P</button>
+    <button class="tab-btn" onclick="switchTab('brp')">✈ BR暑假訂金</button>
   </div>
 </div>
 
@@ -183,6 +184,10 @@
 <!-- JX P 階段說明列 -->
 <div id="jxp-info" style="display:none;padding:4px 12px;font-size:11px;color:#64748b;background:#1a2535;border-bottom:1px solid #2d3f55">
   7/12–8/6 &amp; 8/16–8/23｜JX850 / JX860 分別計算
+</div>
+<!-- BR 暑假訂金說明列 -->
+<div id="brp-info" style="display:none;padding:4px 12px;font-size:11px;color:#64748b;background:#1a2535;border-bottom:1px solid #2d3f55">
+  6/27–8/7 &amp; 8/17–8/23｜BR116 / BR166 分別計算
 </div>
 
 <div id="content">
@@ -214,6 +219,7 @@ function switchTab(tab) {
   event.target.classList.add('active');
   document.getElementById('month-ctrl').style.display = tab === 'month' ? 'flex' : 'none';
   document.getElementById('jxp-info').style.display  = tab === 'jxp'   ? 'block' : 'none';
+  document.getElementById('brp-info').style.display  = tab === 'brp'   ? 'block' : 'none';
   refresh();
 }
 
@@ -236,6 +242,7 @@ function refresh() {
   if (curTab === 'month')   loadMonthData();
   else if (curTab === 'summer') loadSummerData();
   else if (curTab === 'jxp')   loadJxpData();
+  else if (curTab === 'brp')   loadBrpData();
   else                     loadPaidData();
 }
 
@@ -374,6 +381,108 @@ async function loadJxpData() {
 }
 
 function jxpCard(flightNo, rows) {
+  rows = rows.slice().sort((a,b) => (a.date||'').localeCompare(b.date||''));
+  const totalCurr = rows.reduce((s,r) => s + (Number(r.current_seats)||0), 0);
+  const totalUsed = rows.reduce((s,r) => s + (Number(r.used_seats)||0), 0);
+  const { rate, rateCls, barCls, rateLabel } = calcRate(totalCurr, totalUsed);
+  const airline = flightNo.slice(0,2);
+
+  const dateRows = rows.map(r => {
+    const curr = Number(r.current_seats)||0;
+    const used = Number(r.used_seats)||0;
+    const { rate: rr, rateLabel: rl } = calcRate(curr, used);
+    const rColor = rr === null ? '#4b5563' : rr >= 80 ? '#fca5a5' : rr >= 60 ? '#fcd34d' : '#6ee7b7';
+    const md = r.date ? r.date.slice(5).replace('-','/') : '--';
+    return `<tr style="border-bottom:1px solid #1e2a3a">
+      <td style="padding:3px 6px;color:#94a3b8;white-space:nowrap">${md}</td>
+      <td style="padding:3px 6px;text-align:right;color:#93c5fd">${curr}</td>
+      <td style="padding:3px 6px;text-align:right;color:#fbbf24">${used}</td>
+      <td style="padding:3px 6px;text-align:right;color:${rColor};font-weight:bold">${rl}</td>
+    </tr>`;
+  }).join('');
+
+  return `<div class="flight-card ${airline}">
+    <div class="card-header">
+      <span class="flight-name ${airline}">${flightNo}</span>
+      <span style="font-size:11px;color:#64748b">${rows.length} 個出發日</span>
+      <span class="rate-badge ${rateCls}" style="margin-left:auto">整體 ${rateLabel}</span>
+    </div>
+    <div class="card-stats-3">
+      <div class="stat curr"><div class="val">${totalCurr}</div><div class="lbl">總機位</div></div>
+      <div class="stat used"><div class="val">${totalUsed}</div><div class="lbl">已使用</div></div>
+      <div class="stat"><div class="val" style="color:${totalCurr-totalUsed<=0?'#ef4444':'#34d399'}">${totalCurr-totalUsed}</div><div class="lbl">剩餘可售</div></div>
+    </div>
+    <div class="progress-wrap"><div class="progress-bar ${barCls}" style="width:${Math.min(rate||0,100)}%"></div></div>
+    <table style="width:100%;border-collapse:collapse;font-size:11px;margin-top:6px">
+      <thead><tr style="color:#4b5563;font-size:10px">
+        <th style="padding:2px 6px;text-align:left;font-weight:normal">出發日</th>
+        <th style="padding:2px 6px;text-align:right;font-weight:normal">機位</th>
+        <th style="padding:2px 6px;text-align:right;font-weight:normal">已用</th>
+        <th style="padding:2px 6px;text-align:right;font-weight:normal">成行率</th>
+      </tr></thead>
+      <tbody>${dateRows}</tbody>
+    </table>
+  </div>`;
+}
+
+// ── BR 暑假訂金 ───────────────────────────────
+// 日期區間：6/27–8/7 AND 8/17–8/23
+const BRP_RANGES = [
+  { from: [6,27], to: [8, 7] },
+  { from: [8,17], to: [8,23] },
+];
+const BRP_FLIGHTS = ['BR116','BR166'];
+
+function inBrpRange(dateStr) {
+  if (!dateStr) return false;
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return BRP_RANGES.some(r => {
+    const [fm, fd] = r.from, [tm, td] = r.to;
+    const cur  = m * 100 + d;
+    const from = fm * 100 + fd;
+    const to   = tm * 100 + td;
+    return cur >= from && cur <= to;
+  });
+}
+
+async function loadBrpData() {
+  setLoading(true);
+  const year = new Date().getFullYear();
+  try {
+    const [jun, jul, aug] = await Promise.all([
+      fetchMonth(year, 6),
+      fetchMonth(year, 7),
+      fetchMonth(year, 8),
+    ]);
+    const all = [...jun, ...jul, ...aug].filter(f =>
+      BRP_FLIGHTS.includes(f.flight_no) && inBrpRange(f.date)
+    );
+
+    if (all.length === 0) {
+      document.getElementById('content').innerHTML = '<div class="no-data">BR 訂金區間無資料</div>';
+      setLoading(false);
+      return;
+    }
+
+    const byFlight = {};
+    for (const f of all) {
+      if (!byFlight[f.flight_no]) byFlight[f.flight_no] = [];
+      byFlight[f.flight_no].push(f);
+    }
+
+    document.getElementById('content').innerHTML =
+      BRP_FLIGHTS.filter(k => byFlight[k]).map(k => brpCard(k, byFlight[k])).join('');
+
+    setStatus('更新：' + nowTime());
+  } catch (e) {
+    setStatus('錯誤：' + e.message);
+    document.getElementById('content').innerHTML =
+      '<div class="no-data">⚠ 無法取得資料<br><small>' + e.message + '</small></div>';
+  }
+  setLoading(false);
+}
+
+function brpCard(flightNo, rows) {
   rows = rows.slice().sort((a,b) => (a.date||'').localeCompare(b.date||''));
   const totalCurr = rows.reduce((s,r) => s + (Number(r.current_seats)||0), 0);
   const totalUsed = rows.reduce((s,r) => s + (Number(r.used_seats)||0), 0);
